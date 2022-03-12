@@ -33,31 +33,39 @@ def main():
 
     wait_parser = subparsers.add_parser(
         "wait",
-        description="Waits for the flag to be posted",
-        help="waits for the flag to be posted",
+        description="Waits for the cue",
+        help="waits for the cue",
         parents=[parent_parser],
     )
-    wait_parser.add_argument("name", help="the flag name to wait for")
+    wait_parser.add_argument("name", nargs="+", help="the cue name to wait for")
     wait_parser.set_defaults(func=do_wait)
 
     post_parser = subparsers.add_parser(
         "post",
-        description="Posts the flag",
-        help="posts the flag",
+        description="Posts the cue",
+        help="posts the cue",
         parents=[parent_parser],
     )
-    post_parser.add_argument("name", help="the flag name to post for")
+    post_parser.add_argument("name", help="the cue name to post")
     post_parser.set_defaults(func=do_post)
 
     on_parser = subparsers.add_parser(
         "on",
-        description="Runs a command in response to a flag",
-        help="runs a command in response to a flag",
+        description="Runs a command in response to a cue",
+        help="runs a command in response to a cue",
         parents=[parent_parser],
     )
     on_parser.add_argument("name", help="the flag name to on for")
     on_parser.add_argument("command", nargs=argparse.REMAINDER)
     on_parser.set_defaults(func=do_on)
+
+    list_parser = subparsers.add_parser(
+        "list",
+        description="Lists the cues that are being monitored",
+        help="lists the cues that are being monitored",
+        parents=[parent_parser],
+    )
+    list_parser.set_defaults(func=do_list)
 
     args = parser.parse_args()
 
@@ -101,11 +109,11 @@ def do_wait(args):
     url = URL(j["server"]).with_scheme("ws")
     token = j["token"]
 
-    async def hello(flag_name):
-        socket_url = str(url / "p" / flag_name / "listen")
+    async def hello(flag_names):
+        socket_url = (url / "listen").with_query([("name", name) for name in flag_names])
         headers = {"AUTHORIZATION": f"Bearer {token}"}
         log.debug(f"Connecting: {socket_url}")
-        async with websockets.connect(socket_url, extra_headers=headers) as ws:
+        async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
             log.debug("Waiting for flag")
             value = await ws.recv()
             log.debug(f"Received flag: {value}")
@@ -121,7 +129,7 @@ def do_post(args):
     token = j["token"]
 
     r = requests.post(
-        url / "p" / args.name / "post",
+        url / "cues" / args.name,
         json={"name": "yo"},
         headers={"AUTHORIZATION": f"Bearer {token}"},
     )
@@ -155,6 +163,19 @@ def do_on(args):
                 subprocess.run(command, shell=True)
 
     asyncio.run(hello())
+
+
+def do_list(args):
+    with open(".cue") as f:
+        j = json.load(f)
+
+    url = URL(j["server"])
+    token = j["token"]
+
+    r = requests.get(url / "cues/", headers={"AUTHORIZATION": f"Bearer {token}"})
+    r.raise_for_status()
+    for item in r.json():
+        print(item)
 
 
 if __name__ == "__main__":

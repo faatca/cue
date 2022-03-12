@@ -17,7 +17,7 @@ from starlette.websockets import WebSocketDisconnect
 from faat import userdb
 
 auth_db = None
-listeners = []
+listeners = {}
 
 
 def homepage(request):
@@ -40,15 +40,16 @@ async def post_auth(request):
 
 
 @requires("authenticated")
-async def post_message(request):
-    async def send(websocket):
+async def post_cue(request):
+    async def send(id, websocket):
         try:
-            await websocket.send_json({"id": websocket.path_params["id"], "content": content})
+            await websocket.send_json({"id": id, "content": content})
         except WebSocketDisconnect:
-            listeners.remove((id, websocket))
+            listeners.pop(websocket, None)
 
+    id = request.path_params["id"]
     content = await request.json()
-    tasks = [send(ws) for id, ws in list(listeners) if id == request.path_params["id"]]
+    tasks = [send(id, ws) for ws, ws_ids in listeners.items() if id in ws_ids]
     if tasks:
         await asyncio.wait(tasks)
     return JSONResponse({"success": True, "clients": len(tasks)})
@@ -56,20 +57,27 @@ async def post_message(request):
 
 @requires("authenticated")
 def connections(request):
-    request.headers.get("AUTHORIZATION")
-    ids = [id for id, _ in listeners]
+    ids = sorted(set(id for ws, ws_ids in listeners.items() for id in ws_ids))
     return JSONResponse(ids)
 
 
 @requires("authenticated")
 async def websocket_endpoint(websocket):
     await websocket.accept()
-    listeners.append((websocket.path_params["id"], websocket))
+
+    ids = set(v for k, v in websocket.query_params.multi_items() if k == "name")
+
+    if not ids or len(ids) > 128:
+        websocket.close()
+        return
+
+    listeners[websocket] = ids
     while True:
         try:
+            # We accept and discard messages to keep the connection alive through firewalls.
             await websocket.receive_json()
         except WebSocketDisconnect:
-            listeners.remove((websocket.path_params["id"], websocket))
+            listeners.pop(websocket)
             break
 
 
@@ -110,9 +118,9 @@ class TokenAuthBackend(AuthenticationBackend):
 routes = [
     Route("/", homepage),
     Route("/auth", post_auth, methods=["POST"]),
-    Route("/connections", connections),
-    Route("/p/{id}/post", post_message, methods=["POST"]),
-    WebSocketRoute("/p/{id}/listen", websocket_endpoint),
+    Route("/cues/", connections),
+    Route("/cues/{id}", post_cue, methods=["POST"]),
+    WebSocketRoute("/listen", websocket_endpoint),
 ]
 
 
