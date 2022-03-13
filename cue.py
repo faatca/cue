@@ -3,6 +3,7 @@ import asyncio
 import getpass
 import json
 import logging
+from pathlib import Path
 import subprocess
 import sys
 import websockets
@@ -98,13 +99,19 @@ def do_auth(args):
 
     token = r.json()["token"]
 
-    with open(".cue", "w") as f:
+    config_path = Path.home() / ".config/cue.json"
+    if not config_path.parent.is_dir():
+        config_path.parent.mkdir(exists_ok=True)
+
+    with config_path.open("w") as f:
         json.dump({"server": server, "username": username, "token": token}, f)
 
 
 def do_wait(args):
-    with open(".cue") as f:
-        j = json.load(f)
+    j = load_config()
+    if not j:
+        log.error("Authentication required. Use auth command.")
+        return 2
 
     url = URL(j["server"]).with_scheme("ws")
     token = j["token"]
@@ -122,8 +129,10 @@ def do_wait(args):
 
 
 def do_post(args):
-    with open(".cue") as f:
-        j = json.load(f)
+    j = load_config()
+    if not j:
+        log.error("Authentication required. Use auth command.")
+        return 2
 
     url = URL(j["server"])
     token = j["token"]
@@ -139,8 +148,10 @@ def do_post(args):
 
 
 def do_on(args):
-    with open(".cue") as f:
-        j = json.load(f)
+    j = load_config()
+    if not j:
+        log.error("Authentication required. Use auth command.")
+        return 2
 
     url = URL(j["server"]).with_scheme("ws")
     token = j["token"]
@@ -166,8 +177,10 @@ def do_on(args):
 
 
 def do_list(args):
-    with open(".cue") as f:
-        j = json.load(f)
+    j = load_config()
+    if not j:
+        log.error("Authentication required. Use auth command.")
+        return 2
 
     url = URL(j["server"])
     token = j["token"]
@@ -176,6 +189,15 @@ def do_list(args):
     r.raise_for_status()
     for item in r.json():
         print(item)
+
+
+def load_config():
+    config_path = Path.home() / ".config/cue.json"
+    if not config_path.is_file():
+        return None
+
+    with config_path.open() as f:
+        return json.load(f)
 
 
 if __name__ == "__main__":
