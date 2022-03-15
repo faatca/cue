@@ -47,7 +47,7 @@ def main():
         help="posts the cue",
         parents=[parent_parser],
     )
-    post_parser.add_argument("name", help="the cue name to post")
+    post_parser.add_argument("name", nargs="+", help="the cue name to post")
     post_parser.set_defaults(func=do_post)
 
     on_parser = subparsers.add_parser(
@@ -113,7 +113,14 @@ def do_wait(args):
         log.error("Authentication required. Use auth command.")
         return 2
 
-    url = URL(j["server"]).with_scheme("ws")
+    url = URL(j["server"])
+    if url.scheme == "https":
+        url = url.with_scheme("wss")
+    elif url.scheme == "http":
+        url = url.with_scheme("ws")
+    else:
+        raise ValueError(f"Invalid URL: {url}")
+
     token = j["token"]
 
     async def hello(flag_names):
@@ -137,14 +144,15 @@ def do_post(args):
     url = URL(j["server"])
     token = j["token"]
 
-    r = requests.post(
-        url / "cues" / args.name,
-        json={"name": "yo"},
-        headers={"AUTHORIZATION": f"Bearer {token}"},
-    )
-    r.raise_for_status()
-    client_count = r.json()["clients"]
-    print(f"Notified {client_count} clients")
+    for name in args.name:
+        r = requests.post(
+            url / "cues" / name,
+            json={"name": "yo"},
+            headers={"AUTHORIZATION": f"Bearer {token}"},
+        )
+        r.raise_for_status()
+        client_count = r.json()["clients"]
+        print(f"Notified {client_count} listeners for {name}")
 
 
 def do_on(args):
@@ -153,7 +161,14 @@ def do_on(args):
         log.error("Authentication required. Use auth command.")
         return 2
 
-    url = URL(j["server"]).with_scheme("ws")
+    url = URL(j["server"])
+    if url.scheme == "https":
+        url = url.with_scheme("wss")
+    elif url.scheme == "http":
+        url = url.with_scheme("ws")
+    else:
+        raise ValueError(f"Invalid URL: {url}")
+
     token = j["token"]
 
     command = args.command
@@ -163,10 +178,10 @@ def do_on(args):
     flag_name = args.name
 
     async def hello():
-        socket_url = str(url / "p" / flag_name / "listen")
+        socket_url = (url / "listen").with_query({"name": flag_name})
         headers = {"AUTHORIZATION": f"Bearer {token}"}
         log.debug(f"Connecting: {socket_url}")
-        async with websockets.connect(socket_url, extra_headers=headers) as ws:
+        async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
             log.debug("Waiting for flag")
             while True:
                 value = await ws.recv()
