@@ -101,7 +101,7 @@ def do_auth(args):
 
     config_path = Path.home() / ".config/cue.json"
     if not config_path.parent.is_dir():
-        config_path.parent.mkdir(exists_ok=True)
+        config_path.parent.mkdir()
 
     with config_path.open("w") as f:
         json.dump({"server": server, "username": username, "token": token}, f)
