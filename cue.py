@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import websockets
+import random
 import requests
 from yarl import URL
 
@@ -56,9 +57,19 @@ def main():
         help="runs a command in response to a cue",
         parents=[parent_parser],
     )
-    on_parser.add_argument("name", help="the flag name to on for")
+    on_parser.add_argument("name", help="the cue name")
     on_parser.add_argument("command", nargs=argparse.REMAINDER)
     on_parser.set_defaults(func=do_on)
+
+    run_parser = subparsers.add_parser(
+        "run",
+        description="Runs a command and posts completion",
+        help="runs a command and posts completion",
+        parents=[parent_parser],
+    )
+    run_parser.add_argument("--name", help="the cue name")
+    run_parser.add_argument("command", nargs=argparse.REMAINDER)
+    run_parser.set_defaults(func=do_run)
 
     list_parser = subparsers.add_parser(
         "list",
@@ -189,6 +200,42 @@ def do_on(args):
                 subprocess.run(command, shell=True)
 
     asyncio.run(hello())
+
+
+def do_run(args):
+    j = load_config()
+    if not j:
+        log.error("Authentication required. Use auth command.")
+        return 2
+
+    url = URL(j["server"])
+    token = j["token"]
+
+    if args.name:
+        name = args.name
+    else:
+        alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuv23456789'
+        name = "".join(random.choices(alphabet, k=5))
+
+    command = args.command
+    if command[:1] == ["--"]:
+        del command[0]
+
+    print(f"Cue: {name}")
+
+    log.info("Running command")
+    subprocess.run(command, shell=True)
+
+    log.info("Posting cue")
+    r = requests.post(
+        url / "cues" / name,
+        json={"name": "yo"},
+        headers={"AUTHORIZATION": f"Bearer {token}"},
+    )
+    r.raise_for_status()
+    client_count = r.json()["clients"]
+
+    log.info(f"Notified {client_count} listeners for {name}")
 
 
 def do_list(args):
