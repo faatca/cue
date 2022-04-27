@@ -189,15 +189,20 @@ def do_on(args):
     flag_name = args.name
 
     async def hello():
-        socket_url = (url / "listen").with_query({"name": flag_name})
-        headers = {"AUTHORIZATION": f"Bearer {token}"}
-        log.debug(f"Connecting: {socket_url}")
-        async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
-            log.debug("Waiting for flag")
-            while True:
-                value = await ws.recv()
-                log.debug(f"Recieved flag: {value}")
-                subprocess.run(command, shell=True)
+        while True:
+            socket_url = (url / "listen").with_query({"name": flag_name})
+            headers = {"AUTHORIZATION": f"Bearer {token}"}
+            log.debug(f"Connecting: {socket_url}")
+            try:
+                async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
+                    log.debug("Waiting for flag")
+                    while True:
+                        value = await ws.recv()
+                        log.debug(f"Recieved flag: {value}")
+                        subprocess.run(command, shell=True)
+            except websockets.ConnectionClosedError:
+                log.debug("Connection closed. Waiting to reconnect")
+                asyncio.sleep(3)
 
     asyncio.run(hello())
 
