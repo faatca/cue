@@ -6,10 +6,8 @@ import logging
 from pathlib import Path
 import subprocess
 import sys
-import websockets
 import random
-import requests
-from yarl import URL
+from cueclient import Client, authenticate
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +65,7 @@ def main():
         help="runs a command and posts completion",
         parents=[parent_parser],
     )
-    run_parser.add_argument("--name", help="the cue name")
+    run_parser.add_argument("--name", action="append", help="the cue name")
     run_parser.add_argument("command", nargs=argparse.REMAINDER)
     run_parser.set_defaults(func=do_run)
 
@@ -101,86 +99,21 @@ def do_auth(args):
     username = args.user or input("user> ")
     password = getpass.getpass("password> ")
 
-    url = URL(server)
-    r = requests.post(url / "auth", json={"username": username, "password": password})
-    if r.status_code == 401:
-        log.error("Authentication failed")
-        return 2
-    r.raise_for_status()
-
-    token = r.json()["token"]
-
-    config_path = Path.home() / ".config/cue.json"
-    if not config_path.parent.is_dir():
-        config_path.parent.mkdir()
-
-    with config_path.open("w") as f:
-        json.dump({"server": server, "username": username, "token": token}, f)
+    authenticate(server, username, password)
 
 
 def do_wait(args):
-    j = load_config()
-    if not j:
-        log.error("Authentication required. Use auth command.")
-        return 2
-
-    url = URL(j["server"])
-    if url.scheme == "https":
-        url = url.with_scheme("wss")
-    elif url.scheme == "http":
-        url = url.with_scheme("ws")
-    else:
-        raise ValueError(f"Invalid URL: {url}")
-
-    token = j["token"]
-
-    async def hello(flag_names):
-        socket_url = (url / "listen").with_query([("name", name) for name in flag_names])
-        headers = {"AUTHORIZATION": f"Bearer {token}"}
-        log.debug(f"Connecting: {socket_url}")
-        async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
-            log.debug("Waiting for flag")
-            value = await ws.recv()
-            log.debug(f"Received flag: {value}")
-
-    asyncio.run(hello(args.name))
+    client = Client()
+    asyncio.run(client.wait(args.name))
 
 
 def do_post(args):
-    j = load_config()
-    if not j:
-        log.error("Authentication required. Use auth command.")
-        return 2
-
-    url = URL(j["server"])
-    token = j["token"]
-
-    for name in args.name:
-        r = requests.post(
-            url / "cues" / name,
-            json={"name": "yo"},
-            headers={"AUTHORIZATION": f"Bearer {token}"},
-        )
-        r.raise_for_status()
-        client_count = r.json()["clients"]
-        print(f"Notified {client_count} listeners for {name}")
+    client = Client()
+    client.post(args.name)
 
 
 def do_on(args):
-    j = load_config()
-    if not j:
-        log.error("Authentication required. Use auth command.")
-        return 2
-
-    url = URL(j["server"])
-    if url.scheme == "https":
-        url = url.with_scheme("wss")
-    elif url.scheme == "http":
-        url = url.with_scheme("ws")
-    else:
-        raise ValueError(f"Invalid URL: {url}")
-
-    token = j["token"]
+    client = Client()
 
     command = args.command
     if command[:1] == ["--"]:
@@ -189,72 +122,37 @@ def do_on(args):
     flag_name = args.name
 
     async def hello():
-        while True:
-            socket_url = (url / "listen").with_query({"name": flag_name})
-            headers = {"AUTHORIZATION": f"Bearer {token}"}
-            log.debug(f"Connecting: {socket_url}")
-            try:
-                async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
-                    log.debug("Waiting for flag")
-                    while True:
-                        value = await ws.recv()
-                        log.debug(f"Recieved flag: {value}")
-                        subprocess.run(command, shell=True)
-            except websockets.ConnectionClosedError:
-                log.debug("Connection closed. Waiting to reconnect")
-                asyncio.sleep(3)
+        async for value in client.async_iter(flag_name):
+            log.debug(f"Recieved flag: {value}")
+            subprocess.run(command, shell=True)
 
     asyncio.run(hello())
 
 
 def do_run(args):
-    j = load_config()
-    if not j:
-        log.error("Authentication required. Use auth command.")
-        return 2
-
-    url = URL(j["server"])
-    token = j["token"]
+    client = Client()
 
     if args.name:
-        name = args.name
+        names = args.name
     else:
-        alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuv23456789'
-        name = "".join(random.choices(alphabet, k=5))
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuv23456789"
+        names = ["".join(random.choices(alphabet, k=5))]
 
     command = args.command
     if command[:1] == ["--"]:
         del command[0]
 
-    print(f"Cue: {name}")
+    print(f"Cue: {names}")
 
     log.info("Running command")
     subprocess.run(command, shell=True)
 
     log.info("Posting cue")
-    r = requests.post(
-        url / "cues" / name,
-        json={"name": "yo"},
-        headers={"AUTHORIZATION": f"Bearer {token}"},
-    )
-    r.raise_for_status()
-    client_count = r.json()["clients"]
-
-    log.info(f"Notified {client_count} listeners for {name}")
+    client.post(names)
 
 
 def do_list(args):
-    j = load_config()
-    if not j:
-        log.error("Authentication required. Use auth command.")
-        return 2
-
-    url = URL(j["server"])
-    token = j["token"]
-
-    r = requests.get(url / "cues/", headers={"AUTHORIZATION": f"Bearer {token}"})
-    r.raise_for_status()
-    for item in r.json():
+    for item in Client().list():
         print(item)
 
 
