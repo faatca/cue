@@ -103,13 +103,12 @@ def do_auth(args):
 
 
 def do_wait(args):
-    client = Client()
-    asyncio.run(client.wait(args.name))
+    for event in Client().listen(args.name):
+        break
 
 
 def do_post(args):
-    client = Client()
-    client.post(args.name)
+    Client().post(args.name)
 
 
 def do_on(args):
@@ -121,13 +120,10 @@ def do_on(args):
 
     flag_names = set(n.strip() for n in args.name.split(","))
 
-    async def hello():
-        async for value in client.async_iter(flag_names):
-            log.debug(f"Recieved flag: {value}")
-            log.debug(f"Running command: {command=}")
-            subprocess.run(command, shell=False)
-
-    asyncio.run(hello())
+    for value in client.listen(flag_names):
+        log.debug(f"Recieved flag: {value}")
+        log.debug(f"Running command: {command=}")
+        subprocess.run(command, shell=False)
 
 
 def do_run(args):

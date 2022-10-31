@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from starlette.applications import Starlette
 from starlette.authentication import (
@@ -11,7 +12,7 @@ from starlette.authentication import (
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.responses import JSONResponse
-from starlette.websockets import WebSocketDisconnect
+from sse_starlette.sse import EventSourceResponse
 
 from .routing import RouteHelper
 
@@ -47,41 +48,27 @@ async def post_auth(request):
 @routes.post("/cues/{id}")
 @requires("authenticated")
 async def post_cue(request):
-    async def send(id, websocket):
-        try:
-            await websocket.send_json({"id": id, "content": content})
-        except WebSocketDisconnect:
-            listeners.pop(websocket, None)
-
-    id = request.path_params["id"]
+    names = [request.path_params["id"]]
     content = await request.json()
-    tasks = [send(id, ws) for ws, ws_ids in listeners.items() if id in ws_ids]
-    if tasks:
-        await asyncio.wait(tasks)
-    return JSONResponse({"success": True, "clients": len(tasks)})
+    return push_cue(names, content)
 
 
 @routes.post("/cues/")
 @requires("authenticated")
 async def post_cues(request):
-    async def send(ids, websocket):
-        try:
-            await websocket.send_json({"ids": ids, "content": content})
-        except WebSocketDisconnect:
-            listeners.pop(websocket, None)
-
-    ids = set(v for k, v in request.query_params.multi_items() if k == "name")
-
-    tasks = [
-        send(sorted(matches), ws)
-        for ws, ws_ids in listeners.items()
-        for matches in [ws_ids & ids]
-        if matches
-    ]
+    names = set(v for k, v in request.query_params.multi_items() if k == "name")
     content = await request.json()
-    if tasks:
-        await asyncio.wait(tasks)
-    return JSONResponse({"success": True, "clients": len(tasks)})
+    return push_cue(names, content)
+
+
+def push_cue(names, content):
+    listener_count = 0
+    for q, topics in listeners.items():
+        matches = topics & names
+        if matches:
+            listener_count += 1
+            q.put_nowait({"names": sorted(matches), "content": content})
+    return JSONResponse({"success": True, "listeners": listener_count})
 
 
 @routes.get("/connections/")
@@ -91,25 +78,26 @@ def connections(request):
     return JSONResponse(ids)
 
 
-@routes.websocket("/listen")
+@routes.get("/listen")
 @requires("authenticated")
-async def websocket_endpoint(websocket):
-    await websocket.accept()
+async def get_listen(request):
+    names = set(v for k, v in request.query_params.multi_items() if k == "name")
+    if not names:
+        return JSONResponse({"message": "No cue names requested"}, 400)
+    elif len(names) > 128:
+        return JSONResponse({"message": "Too many cue names requested"}, 400)
 
-    ids = set(v for k, v in websocket.query_params.multi_items() if k == "name")
-
-    if not ids or len(ids) > 128:
-        websocket.close()
-        return
-
-    listeners[websocket] = ids
-    while True:
+    async def event_publisher():
+        q = asyncio.Queue()
+        listeners[q] = names
         try:
-            # We accept and discard messages to keep the connection alive through firewalls.
-            await websocket.receive_json()
-        except WebSocketDisconnect:
-            listeners.pop(websocket)
-            break
+            while True:
+                message = await q.get()
+                yield json.dumps(message)
+        finally:
+            listeners.pop(q)
+
+    return EventSourceResponse(event_publisher())
 
 
 def startup():
