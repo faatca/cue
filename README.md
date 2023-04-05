@@ -24,7 +24,7 @@ venv\Scripts\userdb.exe add-user users.db aaron secret
 
 SET CUE_USER_DB=users.db
 
-venv\Scripts\uvicorn cueserver:app
+venv\Scripts\uvicorn faat.cue.server:app
 ```
 
 

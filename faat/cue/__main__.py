@@ -1,13 +1,12 @@
 import argparse
 import asyncio
 import getpass
-import json
 import logging
-from pathlib import Path
-import subprocess
-import sys
 import random
-from .cueclient import Client, authenticate
+import shlex
+from subprocess import list2cmdline, run
+import sys
+from .cueclient import CueClient, authenticate
 
 log = logging.getLogger(__name__)
 
@@ -103,31 +102,44 @@ def do_auth(args):
 
 
 def do_wait(args):
-    for event in Client().listen(args.name):
-        break
+    async def go():
+        async for event in CueClient().listen(args.name):
+            break
+
+    asyncio.run(go())
 
 
 def do_post(args):
-    Client().post(args.name)
+    CueClient().post(args.name)
 
 
 def do_on(args):
-    client = Client()
+    async def go():
+        client = CueClient()
 
-    command = list(args.command)
-    if command[:1] == ["--"]:
-        del command[0]
+        command = list(args.command)
+        if command[:1] == ["--"]:
+            del command[0]
+        cmd = (
+            command[0]
+            if len(command) == 1
+            else list2cmdline(command)
+            if sys.platform == "win32"
+            else shlex.join(command)
+        )
+        flag_names = set(n.strip() for n in args.name.split(","))
 
-    flag_names = set(n.strip() for n in args.name.split(","))
+        async for value in client.listen(flag_names):
+            log.debug(f"Recieved flag: {value}")
+            log.debug(f"Running command: {cmd=}")
+            p = await asyncio.create_subprocess_shell(cmd)
+            await p.wait()
 
-    for value in client.listen(flag_names):
-        log.debug(f"Recieved flag: {value}")
-        log.debug(f"Running command: {command=}")
-        subprocess.run(command, shell=False)
+    asyncio.run(go())
 
 
 def do_run(args):
-    client = Client()
+    client = CueClient()
 
     if args.name:
         names = args.name
@@ -142,24 +154,15 @@ def do_run(args):
     print(f"Cue: {names}")
 
     log.info("Running command")
-    subprocess.run(command, shell=True)
+    run(command, shell=True)
 
     log.info("Posting cue")
     client.post(names)
 
 
 def do_list(args):
-    for item in Client().list():
+    for item in CueClient().list():
         print(item)
-
-
-def load_config():
-    config_path = Path.home() / ".config/cue.json"
-    if not config_path.is_file():
-        return None
-
-    with config_path.open() as f:
-        return json.load(f)
 
 
 if __name__ == "__main__":

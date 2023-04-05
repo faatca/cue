@@ -1,43 +1,42 @@
-import time
+import asyncio
 import json
 import logging
 from pathlib import Path
+
 import requests
-import sseclient
+import websockets
 from yarl import URL
 
 log = logging.getLogger(__name__)
 
 
-class Client:
+class CueClient:
     def __init__(self):
         self.config = load_config()
 
-    def listen(self, flag_names):
-        j = load_config()
-        url = (j.server_url / "listen").with_query([("name", name) for name in flag_names])
-        headers = {"AUTHORIZATION": f"Bearer {j.token}"}
+    async def listen(self, flag_names):
         while True:
+            query_parameters = [("name", flag_name) for flag_name in flag_names]
+            socket_url = (self.config.socket_url / "listen").with_query(query_parameters)
+
+            headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
+            log.debug(f"Connecting: {socket_url}")
             try:
-                log.debug("Connecting")
-                r = requests.get(url, headers=headers, stream=True)
-                r.raise_for_status()
-                client = sseclient.SSEClient(r)
-                try:
-                    log.debug("Waiting for events")
-                    for event in client.events():
-                        if event.event == "message":
-                            j = json.loads(event.data)
-                            yield j
-                finally:
-                    log.debug("Closing response")
-                    client.close()
+                async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
+                    log.debug("Waiting for flag")
+                    while True:
+                        value = await ws.recv()
+                        log.debug(f"Recieved flag: {value}")
+                        yield value
             except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ChunkedEncodingError,
+                ConnectionAbortedError,
+                ConnectionRefusedError,
+                websockets.InvalidStatusCode,
+                websockets.ConnectionClosedError,
+                asyncio.TimeoutError,
             ):
-                log.warning("Connection closed. Waiting to reconnect.")
-                time.sleep(3)
+                log.debug("Connection closed. Waiting to reconnect.")
+                await asyncio.sleep(3)
 
     def post(self, flag_names):
         url = self.config.server_url / "cues/"
@@ -48,7 +47,7 @@ class Client:
         print(f"Notified {client_count} listeners for {flag_names}")
 
     def list(self):
-        url = self.config.server_url / "cues/"
+        url = self.config.server_url / "connections/"
         headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
         r = requests.get(url, headers=headers)
         r.raise_for_status()

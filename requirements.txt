@@ -1,4 +1,4 @@
-starlette
-sse-starlette
 requests
-sseclient-py
+starlette
+websockets
+yarl
