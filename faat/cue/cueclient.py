@@ -28,14 +28,8 @@ class CueClient:
                         value = await ws.recv()
                         log.debug(f"Recieved flag: {value}")
                         yield value
-            except (
-                ConnectionAbortedError,
-                ConnectionRefusedError,
-                websockets.InvalidStatusCode,
-                websockets.ConnectionClosedError,
-                asyncio.TimeoutError,
-            ):
-                log.debug("Connection closed. Waiting to reconnect.")
+            except (ConnectionError, TimeoutError, websockets.WebSocketException):
+                log.debug("Connection error. Waiting to reconnect.")
                 await asyncio.sleep(3)
 
     def post(self, flag_names):
