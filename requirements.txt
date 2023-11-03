@@ -1,5 +1,0 @@
-faat.userdb
-requests
-starlette
-websockets
-yarl

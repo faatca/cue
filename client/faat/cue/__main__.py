@@ -1,6 +1,4 @@
 import argparse
-import asyncio
-import getpass
 import logging
 import random
 import shlex
@@ -26,7 +24,7 @@ def main():
         help="authenticates",
         parents=[parent_parser],
     )
-    auth_parser.add_argument("-u", "--user", help="the username")
+    auth_parser.add_argument("-n", "--name", help="a name for the API key")
     auth_parser.add_argument("-s", "--server", help="the server URL")
     auth_parser.set_defaults(func=do_auth)
 
@@ -68,20 +66,14 @@ def main():
     run_parser.add_argument("command", nargs=argparse.REMAINDER)
     run_parser.set_defaults(func=do_run)
 
-    list_parser = subparsers.add_parser(
-        "list",
-        description="Lists the cues that are being monitored",
-        help="lists the cues that are being monitored",
-        parents=[parent_parser],
-    )
-    list_parser.set_defaults(func=do_list)
-
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
     )
+    logging.getLogger("httpx").setLevel(logging.DEBUG if args.verbose else logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.DEBUG if args.verbose else logging.WARNING)
 
     try:
         result = args.func(args)
@@ -94,19 +86,14 @@ def main():
 
 
 def do_auth(args):
+    # TODO: X pass on the name from args.name
     server = args.server or input("server url> ")
-    username = args.user or input("user> ")
-    password = getpass.getpass("password> ")
-
-    authenticate(server, username, password)
+    authenticate(server)
 
 
 def do_wait(args):
-    async def go():
-        async for event in CueClient().listen(args.name):
-            break
-
-    asyncio.run(go())
+    for event in CueClient().listen(args.name):
+        break
 
 
 def do_post(args):
@@ -114,28 +101,24 @@ def do_post(args):
 
 
 def do_on(args):
-    async def go():
-        client = CueClient()
+    client = CueClient()
 
-        command = list(args.command)
-        if command[:1] == ["--"]:
-            del command[0]
-        cmd = (
-            command[0]
-            if len(command) == 1
-            else list2cmdline(command)
-            if sys.platform == "win32"
-            else shlex.join(command)
-        )
-        flag_names = set(n.strip() for n in args.name.split(","))
+    command = list(args.command)
+    if command[:1] == ["--"]:
+        del command[0]
+    cmd = (
+        command[0]
+        if len(command) == 1
+        else list2cmdline(command)
+        if sys.platform == "win32"
+        else shlex.join(command)
+    )
+    flag_names = set(n.strip() for n in args.name.split(","))
 
-        async for value in client.listen(flag_names):
-            log.debug(f"Recieved flag: {value}")
-            log.debug(f"Running command: {cmd=}")
-            p = await asyncio.create_subprocess_shell(cmd)
-            await p.wait()
-
-    asyncio.run(go())
+    for value in client.listen(flag_names):
+        log.debug(f"Recieved flag: {value}")
+        log.debug(f"Running command: {cmd=}")
+        run(cmd, shell=True)
 
 
 def do_run(args):
@@ -158,11 +141,6 @@ def do_run(args):
 
     log.info("Posting cue")
     client.post(names)
-
-
-def do_list(args):
-    for item in CueClient().list():
-        print(item)
 
 
 if __name__ == "__main__":

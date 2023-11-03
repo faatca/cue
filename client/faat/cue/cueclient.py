@@ -1,10 +1,11 @@
-import asyncio
+import time
 import json
 import logging
 from pathlib import Path
 
-import requests
-import websockets
+import httpx
+from websockets.sync.client import connect
+from websockets import WebSocketException
 from yarl import URL
 
 log = logging.getLogger(__name__)
@@ -13,57 +14,59 @@ log = logging.getLogger(__name__)
 class CueClient:
     def __init__(self):
         self.config = load_config()
+        self._session = None
 
-    async def listen(self, flag_names):
+    def listen(self, flag_names):
         while True:
             query_parameters = [("name", flag_name) for flag_name in flag_names]
-            socket_url = (self.config.socket_url / "listen").with_query(query_parameters)
+            socket_url = (self.config.socket_url / "api/listen").with_query(query_parameters)
 
             headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
             log.debug(f"Connecting: {socket_url}")
             try:
-                async with websockets.connect(str(socket_url), extra_headers=headers) as ws:
+                with connect(str(socket_url), additional_headers=headers) as ws:
                     log.debug("Waiting for flag")
                     while True:
-                        value = await ws.recv()
+                        value = ws.recv()
                         log.debug(f"Recieved flag: {value}")
                         yield value
-            except (ConnectionError, TimeoutError, websockets.WebSocketException):
-                log.debug("Connection error. Waiting to reconnect.")
-                await asyncio.sleep(3)
+            except (ConnectionError, TimeoutError, WebSocketException):
+                log.info("Connection error. Waiting to reconnect.")
+                time.sleep(3)
 
     def post(self, flag_names):
-        url = self.config.server_url / "cues/"
-        headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
-        r = requests.post(url, headers=headers, params={"name": flag_names}, json={})
+        if self._session is None:
+            headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
+            self._session = httpx.Client(headers=headers)
+        url = self.config.server_url / "api/cues"
+        r = self._session.post(str(url), params={"name": flag_names}, json={})
         r.raise_for_status()
-        client_count = r.json()["listeners"]
-        print(f"Notified {client_count} listeners for {flag_names}")
-
-    def list(self):
-        url = self.config.server_url / "connections/"
-        headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
-        r = requests.get(url, headers=headers)
-        r.raise_for_status()
-        return list(r.json())
 
 
-def authenticate(server_url, username, password):
+def authenticate(server_url):
     url = URL(server_url)
-    r = requests.post(url / "auth", json={"username": username, "password": password})
-    if r.status_code == 401:
-        log.error("Authentication failed")
-        return 2
+    r = httpx.post(str(url / "api/auth"))
     r.raise_for_status()
 
-    token = r.json()["token"]
+    j = r.json()
+    id = j["id"]
+    token = j["token"]
+    print("Authorize the new key:", url / "keyrequest" / id)
+    print("Waiting for authorization")
+    while True:
+        r = httpx.get(str(url / "api/hello"), headers={"AUTHORIZATION": f"Bearer {token}"})
+        if r.is_success:
+            break
+        time.sleep(10)
+
+    print("Yes! We're in.")
 
     config_path = Path.home() / ".config/cue.json"
     if not config_path.parent.is_dir():
         config_path.parent.mkdir()
 
     with config_path.open("w") as f:
-        json.dump({"server": server_url, "username": username, "token": token}, f)
+        json.dump({"server": server_url, "token": token}, f)
 
 
 def load_config():

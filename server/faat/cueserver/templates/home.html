@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cue</title>
+  <link rel="stylesheet" type="text/css" href="/static/pico.min.css">
+  <link rel="stylesheet" type="text/css" href="/static/styles.css">
+</head>
+<body>
+  {% import 'macros.html' as macros %}
+  {{ macros.header(request, "Home") }}
+
+  <main class="container">
+    <p>Welcome home. We're glad you here.</p>
+
+    {% if apikeys %}
+    <p>Here's a list of your authorized API keys.</p>
+
+    <ul>
+      {% for k in apikeys %}
+      <li>{{ k }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>You don't have any API keys set up yet.</p>
+    {% endif %}
+  </main>
+
+  <footer class="container">
+    <p>&copy; 2023 faat.ca</p>
+  </footer>
+</body>
+</html>

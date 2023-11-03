@@ -13,18 +13,41 @@ For example, a workstation can notify a user when something interesting happens 
 
 Here's how you can run a development server.
 
-```cmd
-py -m venv venv
-venv\Scripts\python -m pip install -U pip
-venv\Scripts\python -m pip install wheel
-venv\Scripts\python -m pip install faat.userdb
-venv\Scripts\pip install starlette uvicorn[standard]
+Generate a random session key.
 
-venv\Scripts\userdb.exe add-user users.db aaron secret
+```bash
+openssl rand -hex 32
+```
 
-SET CUE_USER_DB=users.db
+Set up a .env file.
 
-venv\Scripts\uvicorn faat.cue.server:app
+```text
+DEBUG=True
+
+OAUTH_CLIENT_ID=--your-values-from-auth0-here--
+OAUTH_CLIENT_SECRET=--your-values-from-auth0-here--
+OAUTH_DOMAIN=--your-values-from-auth0-here--
+
+SESSION_SECRET_KEY=--your-session-key-here--
+SESSION_HTTPS_ONLY=False
+
+CUE_REDIS_URL=redis://localhost
+```
+
+Set up the virtual environment.
+
+```bash
+cd server
+python3.11 -m venv venv
+venv/bin/python -m pip install -U pip wheel
+venv/bin/python -m pip install -e .
+venv/bin/python -m pip install uvicorn[standard]
+```
+
+And run it.
+
+```bash
+venv/bin/uvicorn faat.cueserver.web:app --reload --port 8002
 ```
 
 

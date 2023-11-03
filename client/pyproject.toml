@@ -7,11 +7,8 @@ name = "faat.cue"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "BSD 3-Clause License"}
-dependencies = ["requests", "websockets", "yarl"]
+dependencies = ["httpx", "websockets", "yarl"]
 dynamic = ["version"]
-
-[project.optional-dependencies]
-server = ["starlette", "faat.userdb"]
 
 [project.scripts]
 cue = "faat.cue.__main__:main"
@@ -20,4 +17,4 @@ cue = "faat.cue.__main__:main"
 zip-safe = true
 
 [tool.setuptools.dynamic]
-version = {attr = "faat.cue.__version__"}
+version.attr = "faat.cue.__version__"

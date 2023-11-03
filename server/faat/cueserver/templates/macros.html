@@ -1,0 +1,32 @@
+{% macro header(request, title) %}
+<header>
+  <div class="container">
+    <nav>
+      <ul>
+        <li><strong>Cue</strong></li>
+      </ul>
+      <ul>
+        <li><a href="" class="sign-out">Sign out</a></li>
+      </ul>
+    </nav>
+    <h1>{{ title }}</h1>
+  </div>
+  <form
+    name="sign-out"
+    method="POST"
+    action="/auth/sign-out"
+    style="visibility: hidden;">
+    <input type="hidden" name="csrf" value="{{ request.state.csrf }}">
+  </form>
+
+  <script type="text/javascript">
+    document.querySelector("a.sign-out").addEventListener(
+      "click",
+      e => {
+        e.preventDefault();
+        document.forms["sign-out"].submit();
+      }
+    );
+  </script>
+</header>
+{% endmacro %}
