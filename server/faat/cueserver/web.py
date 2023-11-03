@@ -42,6 +42,19 @@ async def get_home(request):
 
 
 @auth.requires_auth
+async def post_cue(request):
+    async with request.form() as form:
+        if request.session.get("csrf") != form["csrf"]:
+            request.session["flash"] = "Failed. Please try again."
+            return RedirectResponse("/", 303)
+        name = form["name"]
+
+    uid = request.state.user_id
+    await api.push_cue(uid, [name], "")
+    return RedirectResponse("/", 303)
+
+
+@auth.requires_auth
 async def get_keyrequest(request):
     k = request.path_params["key"]
 
@@ -99,6 +112,7 @@ app = Starlette(
     routes=[
         Route("/", get_index),
         Route("/home", get_home),
+        Route("/home/cue", post_cue, methods=["POST"]),
         Route("/keyrequest/{key}", get_keyrequest),
         Route("/keyrequest/{key}/accept", post_keyrequest_confirmation, methods=["POST"]),
         Mount("/auth", routes=auth.routes),

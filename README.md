@@ -236,7 +236,6 @@ sudo systemctl reload nginx
         *   Remove unclear letters from token ids
 *   Features
     *   Allow deletion of tokens from web UI
-    *   Allow posting a cue from UI
     *   Security
         *   Share cues between users - something like team access
         *   Limit access to certain cues for apikeys

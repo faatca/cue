@@ -14,17 +14,30 @@
   <main class="container">
     <p>Welcome home. We're glad you here.</p>
 
-    {% if apikeys %}
-    <p>Here's a list of your authorized API keys.</p>
+    <section>
+      <h2>Access tokens</h2>
 
-    <ul>
-      {% for k in apikeys %}
-      <li>{{ k.name }}</li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p>You don't have any API keys set up yet.</p>
-    {% endif %}
+      {% if apikeys %}
+      <p>Here's a list of your authorized API keys.</p>
+
+      <ul>
+        {% for k in apikeys %}
+        <li>{{ k.name }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p>You don't have any API keys set up yet.</p>
+      {% endif %}
+    </section>
+
+    <section>
+      <h2>Post a cue</h2>
+      <form action="/home/cue" method="POST">
+        <input type="hidden" name="csrf" value="{{ request.state.csrf }}">
+        <input type="text" name="name" placeholder="Cue name">
+        <button type="submit">Post</button>
+      </form>
+    </section>
   </main>
 
   <footer class="container">
