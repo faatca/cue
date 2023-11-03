@@ -53,7 +53,6 @@ class ApiKeyDB:
         return uid
 
     async def find_user_apikeys(self, uid):
-        # TODO: X Pipeline this?
         return [
             await self.r.get(f"apikey:{h}:name")
             for h in await self.r.smembers(f"user:{uid}:apikeys")
@@ -68,5 +67,4 @@ def create_request_id(size=20):
     return "".join(sr.choice(REQUEST_ID_ALPHABET) for _ in range(size))
 
 
-# TODO: X Remove unclear letters
 REQUEST_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

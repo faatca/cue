@@ -36,7 +36,6 @@ async def post_cues(request):
 
     names = set(v for k, v in request.query_params.multi_items() if k == "name")
     content = await request.json()
-    # TODO: X Limit the size and kind of content we push
     await push_cue(uid, names, content)
     return JSONResponse({"message": "posted"})
 
@@ -77,7 +76,6 @@ async def monitor_messages():
                                 for matches in [set(topics) & set(payload["names"])]
                                 if matches
                             ]
-                            # TODO: X Is one slow connection going to hold us up?
                             async with asyncio.TaskGroup() as tasks:
                                 for ws, matches in targets:
                                     tasks.create_task(

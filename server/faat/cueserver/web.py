@@ -23,8 +23,6 @@ log = logging.getLogger(__name__)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.filters["quote_plus"] = quote_plus
 
-# TODO: X It'd be nice to have something on the home page where they could trigger a cue.
-
 
 async def get_index(request):
     if auth.get_user(request):
@@ -67,7 +65,6 @@ async def post_keyrequest_confirmation(request):
     try:
         await apikey_db.redeem_key_request(k, request.state.user_id, name)
     except ValueError:
-        # TODO: Communicate the invalid request
         log.info("Invalid request")
     return RedirectResponse("/", 303)
 
@@ -94,9 +91,6 @@ app = Starlette(
         Middleware(
             SessionMiddleware,
             secret_key=str(settings.SESSION_SECRET_KEY),
-            # TODO: X Consider this setting: same_site="", SameSite flag
-            # prevents the browser from sending session cookie along with
-            # cross-site requests. Defaults to 'lax'.
             https_only=settings.SESSION_HTTPS_ONLY,
         ),
         Middleware(auth.UserMiddleware),

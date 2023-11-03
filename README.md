@@ -221,3 +221,26 @@ map $http_upgrade $connection_upgrade {
 ```bash
 sudo systemctl reload nginx
 ```
+
+
+## Things to do
+
+*   Issues
+    *   Security
+        *   Validate cue names for posting (can mess up DB)
+        *   Limit size and structure of content payload
+        *   Can one slow connection hold up receiving cues for everyone?
+    *   UI
+        *   Decide between the name token and apikey
+        *   Improve CSS and layout
+        *   Remove unclear letters from token ids
+*   Features
+    *   Accept and use the name proposed by the `cue auth` command when approving the token
+    *   Allow deletion of tokens from web UI
+    *   Allow posting a cue from UI
+    *   Security
+        *   Share cues between users - something like team access
+        *   Limit access to certain cues for apikeys
+    *   Provide async version of client
+    *   Improve experience of failed or expired token request
+    *   Allow issuing tokens from the UI for other applications

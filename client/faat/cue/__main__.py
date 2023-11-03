@@ -86,7 +86,6 @@ def main():
 
 
 def do_auth(args):
-    # TODO: X pass on the name from args.name
     server = args.server or input("server url> ")
     authenticate(server)
 
