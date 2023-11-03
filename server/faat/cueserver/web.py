@@ -45,11 +45,11 @@ async def get_home(request):
 async def get_keyrequest(request):
     k = request.path_params["key"]
 
-    is_valid_request = await apikey_db.is_valid_key_request(k)
-    if not is_valid_request:
+    apikey_request = await apikey_db.find_key_request(k)
+    if apikey_request is None:
         return RedirectResponse("/", 303)
 
-    name = f"{datetime.datetime.utcnow()}Z"
+    name = apikey_request["name"] or f"{datetime.datetime.utcnow()}Z"
     return templates.TemplateResponse("keyrequest.html", locals())
 
 

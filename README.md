@@ -235,7 +235,6 @@ sudo systemctl reload nginx
         *   Improve CSS and layout
         *   Remove unclear letters from token ids
 *   Features
-    *   Accept and use the name proposed by the `cue auth` command when approving the token
     *   Allow deletion of tokens from web UI
     *   Allow posting a cue from UI
     *   Security

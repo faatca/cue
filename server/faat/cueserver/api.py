@@ -18,7 +18,8 @@ def homepage(request):
 
 
 async def post_auth(request):
-    request_id, apikey = await apikey_db.start_key_request()
+    name = (await request.json())["name"]
+    request_id, apikey = await apikey_db.start_key_request(name)
     return JSONResponse({"id": request_id, "token": apikey})
 
 

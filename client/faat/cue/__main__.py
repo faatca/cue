@@ -87,7 +87,7 @@ def main():
 
 def do_auth(args):
     server = args.server or input("server url> ")
-    authenticate(server)
+    authenticate(server, args.name)
 
 
 def do_wait(args):

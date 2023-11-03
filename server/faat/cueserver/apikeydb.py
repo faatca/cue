@@ -1,4 +1,5 @@
 import hashlib
+import json
 import random
 import secrets
 import time
@@ -14,35 +15,40 @@ class ApiKeyDB:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def start_key_request(self):
+    async def start_key_request(self, name):
         apikey = secrets.token_urlsafe()
         h = hashlib.sha256(apikey.encode()).hexdigest()
         while True:
             request_id = create_request_id()
-            is_set = await self.r.set(f"key-rq:{request_id}", h, ex=10 * 60, nx=True)
+            payload = json.dumps({"name": name, "h": h})
+            is_set = await self.r.set(f"key-rq:{request_id}", payload, ex=10 * 60, nx=True)
             if is_set:
                 return request_id, apikey
 
-    async def is_valid_key_request(self, request_id):
+    async def find_key_request(self, request_id):
         is_valid_id = len(request_id) > 5 and request_id.isalnum()
         if not is_valid_id:
-            return False
-        h = await self.r.get(f"key-rq:{request_id}")
-        return h is not None
+            return None
+        payload = await self.r.get(f"key-rq:{request_id}")
+        if payload is None:
+            return None
+        return json.loads(payload)
 
     async def redeem_key_request(self, request_id, uid, name):
         is_valid_id = len(request_id) > 5 and request_id.isalnum()
         if not is_valid_id:
             raise ValueError("Invalid ID")
-        h = await self.r.get(f"key-rq:{request_id}")
-        if h is None:
+
+        payload = json.loads(await self.r.get(f"key-rq:{request_id}"))
+        if payload is None:
             raise ValueError("Unknown ID")
 
+        h = payload["h"]
+        key_details = {"uid": uid, "date": time.time(), "name": name}
         async with self.r.pipeline(transaction=True) as pipe:
             await (
-                pipe.set(f"apikey:{h}:uid", uid)
-                .set(f"apikey:{h}:date", time.time())
-                .set(f"apikey:{h}:name", name)
+                pipe.set(f"apikey:{h}", json.dumps(key_details))
+                .set(f"apikey:{h}:uid", uid)
                 .sadd(f"user:{uid}:apikeys", h)
                 .execute()
             )
@@ -54,7 +60,7 @@ class ApiKeyDB:
 
     async def find_user_apikeys(self, uid):
         return [
-            await self.r.get(f"apikey:{h}:name")
+            json.loads(await self.r.get(f"apikey:{h}"))
             for h in await self.r.smembers(f"user:{uid}:apikeys")
         ]
 
