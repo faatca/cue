@@ -239,3 +239,4 @@ sudo systemctl reload nginx
     *   Provide async version of client
     *   Improve experience of failed or expired key request
     *   Allow issuing tokens from the UI for other applications
+    *   support wildcards when listening for events
