@@ -234,6 +234,8 @@ sudo systemctl reload nginx
     *   UI
         *   Improve CSS and layout
 *   Features
+    *   Check cue access at client before posting
+    *   Handle permission errors at client more gracefully
     *   Security
         *   Share cues between users - something like team access
     *   Provide async version of client
