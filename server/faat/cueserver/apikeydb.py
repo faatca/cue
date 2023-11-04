@@ -3,6 +3,7 @@ import json
 import random
 import secrets
 import time
+import uuid
 
 
 class ApiKeyDB:
@@ -20,7 +21,8 @@ class ApiKeyDB:
         h = hashlib.sha256(apikey.encode()).hexdigest()
         while True:
             request_id = create_request_id()
-            payload = json.dumps({"name": name, "h": h})
+            key_id = str(uuid.uuid4())
+            payload = json.dumps({"keyId": key_id, "name": name, "h": h})
             is_set = await self.r.set(f"key-rq:{request_id}", payload, ex=10 * 60, nx=True)
             if is_set:
                 return request_id, apikey
@@ -29,9 +31,11 @@ class ApiKeyDB:
         is_valid_id = len(request_id) > 5 and request_id.isalnum()
         if not is_valid_id:
             return None
+
         payload = await self.r.get(f"key-rq:{request_id}")
         if payload is None:
             return None
+
         return json.loads(payload)
 
     async def redeem_key_request(self, request_id, uid, name):
@@ -44,25 +48,48 @@ class ApiKeyDB:
             raise ValueError("Unknown ID")
 
         h = payload["h"]
-        key_details = {"uid": uid, "date": time.time(), "name": name}
+        key_details = {
+            "id": payload["keyId"],
+            "uid": uid,
+            "date": time.time(),
+            "name": name,
+            "h": h,
+        }
         async with self.r.pipeline(transaction=True) as pipe:
             await (
-                pipe.set(f"apikey:{h}", json.dumps(key_details))
-                .set(f"apikey:{h}:uid", uid)
-                .sadd(f"user:{uid}:apikeys", h)
+                pipe.set(f"keyhash:{h}", json.dumps(key_details))
+                .set(f"apikey:{key_details['id']}", json.dumps(key_details))
+                .sadd(f"user:{uid}:apikeys", key_details["id"])
                 .execute()
             )
 
     async def get_key_user(self, apikey):
         h = hashlib.sha256(apikey.encode()).hexdigest()
-        uid = await self.r.get(f"apikey:{h}:uid")
-        return uid
+        payload = await self.r.get(f"keyhash:{h}")
+        if payload is None:
+            return None
+        return json.loads(payload)["uid"]
 
     async def find_user_apikeys(self, uid):
-        return [
-            json.loads(await self.r.get(f"apikey:{h}"))
-            for h in await self.r.smembers(f"user:{uid}:apikeys")
-        ]
+        key_ids = await self.r.smembers(f"user:{uid}:apikeys")
+        if not key_ids:
+            return []
+        z = [f"apikey:{key_id}" for key_id in key_ids]
+        return [json.loads(k) for k in await self.r.mget(z)]
+
+    async def remove_key(self, key_id):
+        payload = await self.r.get(f"apikey:{key_id}")
+        if not payload:
+            return None
+        key = json.loads(payload)
+        h = key["h"]
+        uid = key["uid"]
+        async with self.r.pipeline(transaction=True) as pipe:
+            await (
+                pipe.delete(f"keyhash:{h}", f"apikey:{key_id}")
+                .srem(f"user:{uid}:apikeys", key_id)
+                .execute()
+            )
 
     async def close(self):
         await self.r.close()

@@ -22,7 +22,7 @@
 
       <ul>
         {% for k in apikeys %}
-        <li>{{ k.name }}</li>
+        <li>{{ k.name }} (<a href="/key-removal/{{ k.id }}">delete</a>)</li>
         {% endfor %}
       </ul>
       {% else %}

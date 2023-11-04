@@ -233,7 +233,6 @@ sudo systemctl reload nginx
     *   UI
         *   Improve CSS and layout
 *   Features
-    *   Allow deletion of keys from web UI
     *   Security
         *   Share cues between users - something like team access
         *   Limit access to certain cues for apikeys
