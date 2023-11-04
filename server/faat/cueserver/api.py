@@ -1,4 +1,5 @@
 import asyncio
+from fnmatch import fnmatch
 import json
 import logging
 import uuid
@@ -18,30 +19,37 @@ def homepage(request):
 
 
 async def post_auth(request):
-    name = (await request.json())["name"]
-    request_id, apikey = await apikey_db.start_key_request(name)
+    j = await request.json()
+    name = j["name"]
+    pattern = j.get("pattern")
+    request_id, apikey = await apikey_db.start_key_request(name, pattern)
     return JSONResponse({"id": request_id, "key": apikey})
 
 
 async def get_hello(request):
-    uid = await get_request_uid(request.headers)
+    uid = (await get_request_key(request.headers))["uid"]
     if not uid:
         return JSONResponse({"message": "Unauthorized"}, 401)
     return JSONResponse({"message": "Hello!"})
 
 
 async def post_cues(request):
-    uid = await get_request_uid(request.headers)
+    key = await get_request_key(request.headers)
+    uid = key["uid"]
     if not uid:
         return JSONResponse({"message": "Unauthorized"}, 401)
 
     names = set(v for k, v in request.query_params.multi_items() if k == "name")
+    bad_names = [n for n in names if key["pattern"] and not fnmatch(n, key['pattern'])]
+    if bad_names:
+        return JSONResponse({"message": "Key has no access to cues", "names": bad_names}, 401)
+
     content = await request.json()
     await push_cue(uid, names, content)
     return JSONResponse({"message": "posted"})
 
 
-async def get_request_uid(headers):
+async def get_request_key(headers):
     if "Authorization" not in headers:
         return
 
@@ -53,7 +61,7 @@ async def get_request_uid(headers):
     except ValueError:
         return
 
-    return await apikey_db.get_key_user(key)
+    return await apikey_db.get_key(key)
 
 
 async def monitor_messages():
@@ -99,7 +107,8 @@ async def push_cue(uid, names, content):
 
 
 async def get_listen(websocket):
-    uid = await get_request_uid(websocket.headers)
+    key = await get_request_key(websocket.headers)
+    uid = key["uid"]
     if uid is None:
         await websocket.close(code=1008)
         return
@@ -109,6 +118,10 @@ async def get_listen(websocket):
         return JSONResponse({"message": "No cue names requested"}, 400)
     elif len(names) > 128:
         return JSONResponse({"message": "Too many cue names requested"}, 400)
+
+    bad_names = [n for n in names if key["pattern"] and not fnmatch(n, key['pattern'])]
+    if bad_names:
+        return JSONResponse({"message": "Key has no access to cues", "names": bad_names}, 401)
 
     await websocket.accept()
 

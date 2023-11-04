@@ -16,14 +16,14 @@ class ApiKeyDB:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def start_key_request(self, name):
+    async def start_key_request(self, name, pattern):
         apikey = secrets.token_urlsafe()
         h = hashlib.sha256(apikey.encode()).hexdigest()
         while True:
             request_id = create_request_id()
             key_id = str(uuid.uuid4())
-            payload = json.dumps({"keyId": key_id, "name": name, "h": h})
-            is_set = await self.r.set(f"key-rq:{request_id}", payload, ex=10 * 60, nx=True)
+            payload = json.dumps({"keyId": key_id, "name": name, "pattern": pattern, "h": h})
+            is_set = await self.r.set(f"key-rq:{request_id}", payload, ex=5 * 60, nx=True)
             if is_set:
                 return request_id, apikey
 
@@ -53,6 +53,7 @@ class ApiKeyDB:
             "uid": uid,
             "date": time.time(),
             "name": name,
+            "pattern": payload["pattern"],
             "h": h,
         }
         async with self.r.pipeline(transaction=True) as pipe:
@@ -63,12 +64,12 @@ class ApiKeyDB:
                 .execute()
             )
 
-    async def get_key_user(self, apikey):
+    async def get_key(self, apikey):
         h = hashlib.sha256(apikey.encode()).hexdigest()
         payload = await self.r.get(f"keyhash:{h}")
         if payload is None:
             return None
-        return json.loads(payload)["uid"]
+        return json.loads(payload)
 
     async def find_user_apikeys(self, uid):
         key_ids = await self.r.smembers(f"user:{uid}:apikeys")

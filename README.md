@@ -227,15 +227,15 @@ sudo systemctl reload nginx
 
 *   Issues
     *   Security
-        *   Validate cue names for posting (can it mess up the DB?)
+        *   Validate cue names to limit length
         *   Limit size and structure of content payload
         *   Can one slow connection hold up receiving cues for everyone?
+        *   Throttle key requests
     *   UI
         *   Improve CSS and layout
 *   Features
     *   Security
         *   Share cues between users - something like team access
-        *   Limit access to certain cues for apikeys
     *   Provide async version of client
     *   Improve experience of failed or expired key request
     *   Allow issuing tokens from the UI for other applications

@@ -43,9 +43,9 @@ class CueClient:
         r.raise_for_status()
 
 
-def authenticate(server_url, name):
+def authenticate(server_url, name, pattern):
     url = URL(server_url)
-    r = httpx.post(str(url / "api/auth"), json={"name": name})
+    r = httpx.post(str(url / "api/auth"), json={"name": name, "pattern": pattern})
     r.raise_for_status()
 
     j = r.json()

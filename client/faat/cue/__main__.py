@@ -26,6 +26,7 @@ def main():
     )
     auth_parser.add_argument("-n", "--name", help="a name for the API key")
     auth_parser.add_argument("-s", "--server", help="the server URL")
+    auth_parser.add_argument("-p", "--pattern", help="limits access to cues of this glob pattern")
     auth_parser.set_defaults(func=do_auth)
 
     wait_parser = subparsers.add_parser(
@@ -87,7 +88,7 @@ def main():
 
 def do_auth(args):
     server = args.server or input("server url> ")
-    authenticate(server, args.name)
+    authenticate(server, args.name, args.pattern)
 
 
 def do_wait(args):

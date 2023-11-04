@@ -95,6 +95,7 @@ async def key_removal(request):
 @auth.requires_auth
 async def post_keyrequest_confirmation(request):
     k = request.path_params["key"]
+
     async with request.form() as form:
         if request.session.get("csrf") != form["csrf"]:
             request.session["flash"] = "Failed. Please try again."
