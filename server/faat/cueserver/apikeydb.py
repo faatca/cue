@@ -53,7 +53,7 @@ class ApiKeyDB:
                 .execute()
             )
 
-    async def get_token_user(self, apikey):
+    async def get_key_user(self, apikey):
         h = hashlib.sha256(apikey.encode()).hexdigest()
         uid = await self.r.get(f"apikey:{h}:uid")
         return uid
@@ -73,4 +73,4 @@ def create_request_id(size=20):
     return "".join(sr.choice(REQUEST_ID_ALPHABET) for _ in range(size))
 
 
-REQUEST_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+REQUEST_ID_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"

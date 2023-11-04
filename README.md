@@ -227,18 +227,16 @@ sudo systemctl reload nginx
 
 *   Issues
     *   Security
-        *   Validate cue names for posting (can mess up DB)
+        *   Validate cue names for posting (can it mess up the DB?)
         *   Limit size and structure of content payload
         *   Can one slow connection hold up receiving cues for everyone?
     *   UI
-        *   Decide between the name token and apikey
         *   Improve CSS and layout
-        *   Remove unclear letters from token ids
 *   Features
-    *   Allow deletion of tokens from web UI
+    *   Allow deletion of keys from web UI
     *   Security
         *   Share cues between users - something like team access
         *   Limit access to certain cues for apikeys
     *   Provide async version of client
-    *   Improve experience of failed or expired token request
+    *   Improve experience of failed or expired key request
     *   Allow issuing tokens from the UI for other applications

@@ -20,7 +20,7 @@ def homepage(request):
 async def post_auth(request):
     name = (await request.json())["name"]
     request_id, apikey = await apikey_db.start_key_request(name)
-    return JSONResponse({"id": request_id, "token": apikey})
+    return JSONResponse({"id": request_id, "key": apikey})
 
 
 async def get_hello(request):
@@ -47,13 +47,13 @@ async def get_request_uid(headers):
 
     auth = headers["Authorization"]
     try:
-        scheme, token = auth.split()
+        scheme, key = auth.split()
         if scheme.lower() not in ("bearer", "apikey"):
             return
     except ValueError:
         return
 
-    return await apikey_db.get_token_user(token)
+    return await apikey_db.get_key_user(key)
 
 
 async def monitor_messages():

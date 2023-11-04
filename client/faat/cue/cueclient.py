@@ -21,7 +21,7 @@ class CueClient:
             query_parameters = [("name", flag_name) for flag_name in flag_names]
             socket_url = (self.config.socket_url / "api/listen").with_query(query_parameters)
 
-            headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
+            headers = {"AUTHORIZATION": f"Bearer {self.config.key}"}
             log.debug(f"Connecting: {socket_url}")
             try:
                 with connect(str(socket_url), additional_headers=headers) as ws:
@@ -36,7 +36,7 @@ class CueClient:
 
     def post(self, flag_names):
         if self._session is None:
-            headers = {"AUTHORIZATION": f"Bearer {self.config.token}"}
+            headers = {"AUTHORIZATION": f"Bearer {self.config.key}"}
             self._session = httpx.Client(headers=headers)
         url = self.config.server_url / "api/cues"
         r = self._session.post(str(url), params={"name": flag_names}, json={})
@@ -50,11 +50,11 @@ def authenticate(server_url, name):
 
     j = r.json()
     id = j["id"]
-    token = j["token"]
+    key = j["key"]
     print("Authorize the new key:", url / "keyrequest" / id)
     print("Waiting for authorization")
     while True:
-        r = httpx.get(str(url / "api/hello"), headers={"AUTHORIZATION": f"Bearer {token}"})
+        r = httpx.get(str(url / "api/hello"), headers={"AUTHORIZATION": f"Bearer {key}"})
         if r.is_success:
             break
         time.sleep(10)
@@ -66,7 +66,7 @@ def authenticate(server_url, name):
         config_path.parent.mkdir()
 
     with config_path.open("w") as f:
-        json.dump({"server": server_url, "token": token}, f)
+        json.dump({"server": server_url, "key": key}, f)
 
 
 def load_config():
@@ -80,14 +80,14 @@ def load_config():
     server_url = URL(j["server"])
     socket_scheme = SOCKET_URL_SCHEMES[server_url.scheme]
     socket_url = server_url.with_scheme(socket_scheme)
-    return Config(server_url, socket_url, j["token"])
+    return Config(server_url, socket_url, j["key"])
 
 
 class Config:
-    def __init__(self, server_url, socket_url, token):
+    def __init__(self, server_url, socket_url, key):
         self.server_url = server_url
         self.socket_url = socket_url
-        self.token = token
+        self.key = key
 
 
 class Error(Exception):
