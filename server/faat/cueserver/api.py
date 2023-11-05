@@ -40,7 +40,7 @@ async def post_cues(request):
         return JSONResponse({"message": "Unauthorized"}, 401)
 
     names = set(v for k, v in request.query_params.multi_items() if k == "name")
-    bad_names = [n for n in names if key["pattern"] and not fnmatch(n, key['pattern'])]
+    bad_names = [n for n in names if key["pattern"] and not fnmatch(n, key["pattern"])]
     if bad_names:
         return JSONResponse({"message": "Key has no access to cues", "names": bad_names}, 401)
 
@@ -77,14 +77,24 @@ async def monitor_messages():
                         log.debug(f"(Reader) Message Received: {message}")
                         payload = json.loads(message["data"])
 
+                        targets = []
                         listeners = user_listeners.get(payload["uid"])
                         if listeners:
-                            targets = [
-                                (ws, matches)
-                                for ws, topics in listeners.items()
-                                for matches in [set(topics) & set(payload["names"])]
-                                if matches
-                            ]
+                            for ws, listener_settings in listeners.items():
+                                matches = [
+                                    m
+                                    for m in payload["names"]
+                                    if (
+                                        not listener_settings["keyPattern"]
+                                        or fnmatch(m, listener_settings["keyPattern"])
+                                    )
+                                    and any(fnmatch(m, p) for p in listener_settings["names"])
+                                ]
+
+                                if matches:
+                                    targets.append((ws, matches))
+
+                        if targets:
                             async with asyncio.TaskGroup() as tasks:
                                 for ws, matches in targets:
                                     tasks.create_task(
@@ -119,21 +129,21 @@ async def get_listen(websocket):
     elif len(names) > 128:
         return JSONResponse({"message": "Too many cue names requested"}, 400)
 
-    bad_names = [n for n in names if key["pattern"] and not fnmatch(n, key['pattern'])]
-    if bad_names:
-        return JSONResponse({"message": "Key has no access to cues", "names": bad_names}, 401)
-
     await websocket.accept()
 
     listeners = user_listeners.get(uid)
     if listeners is None:
         listeners = {}
         user_listeners[uid] = listeners
-    listeners[websocket] = names
+
+    listeners[websocket] = {"keyPattern": key["pattern"], "names": names}
     try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            pass
+    finally:
         listeners.pop(websocket)
         if not listeners:
             user_listeners.pop(uid)
