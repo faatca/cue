@@ -1,5 +1,6 @@
 import argparse
 import logging
+from pathlib import Path
 import random
 import shlex
 from subprocess import list2cmdline, run
@@ -17,6 +18,12 @@ def main():
 
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("-v", "--verbose", action="store_true", help="show debug messages")
+    parent_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path.home() / ".config/cue.json",
+        help="path to settings file",
+    )
 
     auth_parser = subparsers.add_parser(
         "auth",
@@ -89,20 +96,20 @@ def main():
 
 def do_auth(args):
     server = args.server or input("server url> ")
-    authenticate(server, args.name, args.pattern)
+    authenticate(args.config, server, args.name, args.pattern)
 
 
 def do_wait(args):
-    for event in CueClient().listen(args.name):
+    for event in CueClient(args.config).listen(args.name):
         break
 
 
 def do_post(args):
-    CueClient().post(args.name, args.content)
+    CueClient(args.config).post(args.name, args.content)
 
 
 def do_on(args):
-    client = CueClient()
+    client = CueClient(args.config)
 
     command = list(args.command)
     if command[:1] == ["--"]:
@@ -116,26 +123,29 @@ def do_on(args):
     )
     flag_names = set(n.strip() for n in args.name.split(","))
 
-    for value in client.listen(flag_names):
-        log.debug(f"Recieved flag: {value}")
-        log.debug(f"Running command: {cmd=}")
-        run(cmd, shell=True)
+    try:
+        for value in client.listen(flag_names):
+            log.debug(f"Recieved flag: {value}")
+            log.debug(f"Running command: {cmd=}")
+            run(cmd, shell=True)
+    except KeyboardInterrupt:
+        log.debug("Closed")
 
 
 def do_run(args):
-    client = CueClient()
+    client = CueClient(args.config)
 
     if args.name:
         names = args.name
     else:
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuv23456789"
-        names = ["".join(random.choices(alphabet, k=5))]
+        cue_name = "auto." + "".join(random.choices(alphabet, k=5))
+        print(f"Using random cue name: {cue_name}")
+        names = [cue_name]
 
     command = args.command
     if command[:1] == ["--"]:
         del command[0]
-
-    print(f"Cue: {names}")
 
     log.info("Running command")
     run(command, shell=True)

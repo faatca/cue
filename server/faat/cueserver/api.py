@@ -120,7 +120,7 @@ async def push_cue(uid, names, content):
         "id": str(uuid.uuid4()),
         "uid": uid,
         "names": sorted(names),
-        "content": base64.b64encode(content).decode(),
+        "content": None if content is None else base64.b64encode(content).decode(),
     }
     await redis_db.publish("cues", json.dumps(payload))
 

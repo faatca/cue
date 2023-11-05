@@ -51,7 +51,7 @@ async def post_cue(request):
         name = form["name"]
 
     uid = request.state.user_id
-    await api.push_cue(uid, [name], "")
+    await api.push_cue(uid, [name], None)
     return RedirectResponse("/home", 303)
 
 

@@ -98,7 +98,7 @@ class ApiKeyDB:
 
 def create_request_id(size=20):
     sr = random.SystemRandom()
-    return "".join(sr.choice(REQUEST_ID_ALPHABET) for _ in range(size))
+    return "".join(sr.choices(REQUEST_ID_ALPHABET, k=size))
 
 
 REQUEST_ID_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
