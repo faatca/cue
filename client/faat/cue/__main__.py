@@ -44,6 +44,7 @@ def main():
         help="posts the cue",
         parents=[parent_parser],
     )
+    post_parser.add_argument("--content", help="optional payload to include with the cue")
     post_parser.add_argument("name", nargs="+", help="the cue name to post")
     post_parser.set_defaults(func=do_post)
 
@@ -97,7 +98,7 @@ def do_wait(args):
 
 
 def do_post(args):
-    CueClient().post(args.name)
+    CueClient().post(args.name, args.content)
 
 
 def do_on(args):

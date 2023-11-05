@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from fnmatch import fnmatch
 import json
 import logging
@@ -44,9 +45,12 @@ async def post_cues(request):
     if bad_names:
         return JSONResponse({"message": "Key has no access to cues", "names": bad_names}, 401)
 
-    content = await request.json()
+    content = await request.body()
+    if len(content) > 512 * 1024:
+        return JSONResponse({"message": "Content is too large"}, 400)
+
     await push_cue(uid, names, content)
-    return JSONResponse({"message": "posted"})
+    return JSONResponse({"message": "Posted"})
 
 
 async def get_request_key(headers):
@@ -55,7 +59,7 @@ async def get_request_key(headers):
 
     auth = headers["Authorization"]
     try:
-        scheme, key = auth.split()
+        scheme, key = auth.split(maxsplit=1)
         if scheme.lower() not in ("bearer", "apikey"):
             return
     except ValueError:
@@ -112,7 +116,12 @@ async def monitor_messages():
 
 
 async def push_cue(uid, names, content):
-    payload = {"id": str(uuid.uuid4()), "uid": uid, "names": sorted(names), "content": content}
+    payload = {
+        "id": str(uuid.uuid4()),
+        "uid": uid,
+        "names": sorted(names),
+        "content": base64.b64encode(content).decode(),
+    }
     await redis_db.publish("cues", json.dumps(payload))
 
 
