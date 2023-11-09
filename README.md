@@ -227,7 +227,6 @@ sudo systemctl reload nginx
 
 *   Issues
     *   Security
-        *   Validate cue names to limit length
         *   Can one slow connection hold up receiving cues for everyone?
         *   Throttle key requests
     *   UI

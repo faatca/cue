@@ -8,6 +8,7 @@ import uuid
 from starlette.responses import JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
+from . import validating
 from .db import apikey_db, redis_db
 
 log = logging.getLogger(__name__)
@@ -23,6 +24,14 @@ async def post_auth(request):
     j = await request.json()
     name = j["name"]
     pattern = j.get("pattern")
+
+    if err := validating.validate_key_name(name):
+        return JSONResponse({"message": err}, 400)
+
+    if pattern is not None:
+        if err := validating.validate_cue_pattern(pattern):
+            return JSONResponse({"message": err}, 400)
+
     request_id, apikey = await apikey_db.start_key_request(name, pattern)
     return JSONResponse({"id": request_id, "key": apikey})
 
@@ -39,6 +48,11 @@ async def post_cues(request):
     uid = key["uid"]
     if not uid:
         return JSONResponse({"message": "Unauthorized"}, 401)
+
+    for k, v in request.query_params.multi_items():
+        if k == "name":
+            if err := validating.validate_cue_name(v):
+                return JSONResponse({"message": err}, 400)
 
     names = set(v for k, v in request.query_params.multi_items() if k == "name")
     bad_names = [n for n in names if key["pattern"] and not fnmatch(n, key["pattern"])]
@@ -92,7 +106,7 @@ async def monitor_messages():
                                         not listener_settings["keyPattern"]
                                         or fnmatch(m, listener_settings["keyPattern"])
                                     )
-                                    and any(fnmatch(m, p) for p in listener_settings["names"])
+                                    and any(fnmatch(m, p) for p in listener_settings["patterns"])
                                 ]
 
                                 if matches:
@@ -132,11 +146,16 @@ async def get_listen(websocket):
         await websocket.close(code=1008)
         return
 
-    names = set(v for k, v in websocket.query_params.multi_items() if k == "name")
-    if not names:
-        return JSONResponse({"message": "No cue names requested"}, 400)
-    elif len(names) > 128:
-        return JSONResponse({"message": "Too many cue names requested"}, 400)
+    patterns = set(v for k, v in websocket.query_params.multi_items() if k == "name")
+    for k, v in websocket.query_params.multi_items():
+        if k == "name":
+            if err := validating.validate_cue_pattern(v):
+                return JSONResponse({"message": err})
+
+    if not patterns:
+        return JSONResponse({"message": "No cue patterns requested"}, 400)
+    if len(patterns) > 128:
+        return JSONResponse({"message": "Too many cue patterns requested"}, 400)
 
     await websocket.accept()
 
@@ -145,7 +164,7 @@ async def get_listen(websocket):
         listeners = {}
         user_listeners[uid] = listeners
 
-    listeners[websocket] = {"keyPattern": key["pattern"], "names": names}
+    listeners[websocket] = {"keyPattern": key["pattern"], "patterns": patterns}
     try:
         try:
             while True:

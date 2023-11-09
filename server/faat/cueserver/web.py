@@ -16,6 +16,7 @@ from starlette.templating import Jinja2Templates
 from . import api
 from . import auth
 from . import settings
+from . import validating
 from .csrf import CSRFMiddleware
 from .db import apikey_db
 
@@ -49,6 +50,9 @@ async def post_cue(request):
             request.session["flash"] = "Failed. Please try again."
             return RedirectResponse("/home", 303)
         name = form["name"]
+        if err := validating.validate_cue_name(name):
+            request.session["flash"] = f"Failed: {err}"
+            return RedirectResponse("/home", 303)
 
     uid = request.state.user_id
     await api.push_cue(uid, [name], None)
@@ -59,9 +63,14 @@ async def post_cue(request):
 async def get_keyrequest(request):
     k = request.path_params["key"]
 
+    if err := validating.validate_key(k):
+        request.session["flash"] = "Invalid key"
+        return RedirectResponse("/home", 303)
+
     apikey_request = await apikey_db.find_key_request(k)
     if apikey_request is None:
-        return RedirectResponse("/", 303)
+        request.session["flash"] = "Unknown key"
+        return RedirectResponse("/home", 303)
 
     name = apikey_request["name"] or f"{datetime.datetime.utcnow()}Z"
     return templates.TemplateResponse("keyrequest.html", locals())
@@ -70,11 +79,13 @@ async def get_keyrequest(request):
 @auth.requires_auth
 async def key_removal(request):
     key_id = request.path_params["key"]
-    if not re.fullmatch(r"[0-9A-Fa-f-]+", key_id):
+    if validating.validate_key_id(key_id):
         request.session["flash"] = "Invalid key ID"
         return RedirectResponse("/home", 303)
 
-    keys = [k for k in await apikey_db.find_user_apikeys(request.state.user_id) if k["id"] == key_id]
+    keys = [
+        k for k in await apikey_db.find_user_apikeys(request.state.user_id) if k["id"] == key_id
+    ]
     if not keys:
         request.session["flash"] = "Key not found"
         return RedirectResponse("/home", 303)
@@ -101,6 +112,9 @@ async def post_keyrequest_confirmation(request):
             request.session["flash"] = "Failed. Please try again."
             return RedirectResponse("/", 303)
         name = form["name"] or f"{datetime.datetime.utcnow()}Z"
+        if validating.validate_key_name(name):
+            request.session["flash"] = "Invalid key name"
+            return RedirectResponse("/", 303)
 
     try:
         await apikey_db.redeem_key_request(k, request.state.user_id, name)
