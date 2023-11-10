@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import logging
-import re
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -40,6 +39,8 @@ async def get_home(request):
     uid = request.state.user_id
 
     apikeys = await apikey_db.find_user_apikeys(uid)
+    flash = request.session.get("flash")
+    request.session["flash"] = None
     return templates.TemplateResponse("home.html", locals())
 
 
@@ -56,6 +57,7 @@ async def post_cue(request):
 
     uid = request.state.user_id
     await api.push_cue(uid, [name], None)
+    request.session["flash"] = f"Posted cue {name}"
     return RedirectResponse("/home", 303)
 
 
@@ -120,6 +122,7 @@ async def post_keyrequest_confirmation(request):
         await apikey_db.redeem_key_request(k, request.state.user_id, name)
     except ValueError:
         log.info("Invalid request")
+    request.session["flash"] = f"Accepted access key {k} as {name}"
     return RedirectResponse("/", 303)
 
 

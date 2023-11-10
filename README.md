@@ -229,12 +229,7 @@ sudo systemctl reload nginx
     *   Security
         *   Can one slow connection hold up receiving cues for everyone?
         *   Throttle key requests
-    *   UI
-        *   Improve CSS and layout
 *   Features
     *   Handle permission errors at client more gracefully
-    *   Security
-        *   Share cues between users - something like team access
     *   Provide async version of client
-    *   Improve experience of failed or expired key request
     *   Allow requesting tokens from the UI for other applications

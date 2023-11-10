@@ -37,8 +37,8 @@ async def post_auth(request):
 
 
 async def get_hello(request):
-    uid = (await get_request_key(request.headers))["uid"]
-    if not uid:
+    k = await get_request_key(request.headers)
+    if not k:
         return JSONResponse({"message": "Unauthorized"}, 401)
     return JSONResponse({"message": "Hello!"})
 

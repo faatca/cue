@@ -1,16 +1,12 @@
 {% macro header(request, title) %}
 <header>
-  <div class="container">
-    <nav>
-      <ul>
-        <li><strong>Cue</strong></li>
-      </ul>
-      <ul>
-        <li><a href="" class="sign-out">Sign out</a></li>
-      </ul>
-    </nav>
-    <h1>{{ title }}</h1>
-  </div>
+  <nav class="navbar bg-body-tertiary">
+    <div class="container">
+      <a class="navbar-brand">Cue</a>
+      <a href="" class="btn btn-outline-secondary btn-sm sign-out">Sign out</a>
+    </div>
+  </nav>
+
   <form
     name="sign-out"
     method="POST"
