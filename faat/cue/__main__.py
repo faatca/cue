@@ -5,7 +5,8 @@ import random
 import shlex
 from subprocess import list2cmdline, run
 import sys
-from .cueclient import CueClient, authenticate
+from . import connect
+from .keyprovisioning import authenticate
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ def main():
         default=Path.home() / ".config/cue.json",
         help="path to settings file",
     )
+    parent_parser.add_argument("-k", "--key", help="a name for the API key to use")
 
     auth_parser = subparsers.add_parser(
         "auth",
@@ -31,9 +33,8 @@ def main():
         help="authenticates",
         parents=[parent_parser],
     )
-    auth_parser.add_argument("-n", "--name", help="a name for the API key")
-    auth_parser.add_argument("-s", "--server", help="the server URL")
     auth_parser.add_argument("-p", "--pattern", help="limits access to cues of this glob pattern")
+    auth_parser.add_argument("url", help="the server URL")
     auth_parser.set_defaults(func=do_auth)
 
     wait_parser = subparsers.add_parser(
@@ -95,63 +96,65 @@ def main():
 
 
 def do_auth(args):
-    server = args.server or input("server url> ")
-    authenticate(args.config, server, args.name, args.pattern)
+    try:
+        authenticate(args.config, args.url, args.key, args.pattern)
+    except KeyboardInterrupt:
+        pass
 
 
 def do_wait(args):
-    for event in CueClient(args.config).listen(args.name):
-        break
+    with connect(config_path=args.config, key_name=args.key) as client:
+        for event in client.listen(args.name):
+            break
 
 
 def do_post(args):
-    CueClient(args.config).post(args.name, args.content)
+    with connect(config_path=args.config, key_name=args.key) as client:
+        client.post(args.name, args.content)
 
 
 def do_on(args):
-    client = CueClient(args.config)
+    with connect(config_path=args.config, key_name=args.key) as client:
+        command = list(args.command)
+        if command[:1] == ["--"]:
+            del command[0]
+        cmd = (
+            command[0]
+            if len(command) == 1
+            else list2cmdline(command)
+            if sys.platform == "win32"
+            else shlex.join(command)
+        )
+        flag_names = set(n.strip() for n in args.name.split(","))
 
-    command = list(args.command)
-    if command[:1] == ["--"]:
-        del command[0]
-    cmd = (
-        command[0]
-        if len(command) == 1
-        else list2cmdline(command)
-        if sys.platform == "win32"
-        else shlex.join(command)
-    )
-    flag_names = set(n.strip() for n in args.name.split(","))
-
-    try:
-        for value in client.listen(flag_names):
-            log.debug(f"Recieved flag: {value}")
-            log.debug(f"Running command: {cmd=}")
-            run(cmd, shell=True)
-    except KeyboardInterrupt:
-        log.debug("Closed")
+        try:
+            for value in client.listen(flag_names):
+                log.debug(f"Recieved flag: {value}")
+                log.debug(f"Running command: {cmd=}")
+                run(cmd, shell=True)
+        except KeyboardInterrupt:
+            log.debug("Closed")
 
 
 def do_run(args):
-    client = CueClient(args.config)
+    with connect(config_path=args.config, key_name=args.key) as client:
+        if args.name:
+            names = args.name
+        else:
+            alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuv23456789"
+            cue_name = "auto." + "".join(random.choices(alphabet, k=5))
+            print(f"Using random cue name: {cue_name}")
+            names = [cue_name]
 
-    if args.name:
-        names = args.name
-    else:
-        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuv23456789"
-        cue_name = "auto." + "".join(random.choices(alphabet, k=5))
-        print(f"Using random cue name: {cue_name}")
-        names = [cue_name]
+        command = args.command
+        if command[:1] == ["--"]:
+            del command[0]
 
-    command = args.command
-    if command[:1] == ["--"]:
-        del command[0]
+        log.info("Running command")
+        run(command, shell=True)
 
-    log.info("Running command")
-    run(command, shell=True)
-
-    log.info("Posting cue")
-    client.post(names)
+        log.info("Posting cue")
+        client.post(names)
 
 
 if __name__ == "__main__":
