@@ -45,7 +45,7 @@ class CueClient:
                         if value["content"]:
                             value["content"] = base64.b64decode(value["content"])
                         yield value
-            except (ConnectionError, TimeoutError, WebSocketException):
+            except (ConnectionError, TimeoutError, WebSocketException, FileNotFoundError):
                 log.info("Connection error. Waiting to reconnect.")
                 time.sleep(3)
 
@@ -85,7 +85,7 @@ class AsyncCueClient:
                         if value["content"]:
                             value["content"] = base64.b64decode(value["content"])
                         yield value
-            except (ConnectionError, TimeoutError, WebSocketException):
+            except (ConnectionError, TimeoutError, WebSocketException, FileNotFoundError):
                 log.info("Connection error. Waiting to reconnect.")
                 asyncio.sleep(3)
 
