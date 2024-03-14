@@ -87,7 +87,7 @@ class AsyncCueClient:
                         yield value
             except (ConnectionError, TimeoutError, WebSocketException, FileNotFoundError):
                 log.info("Connection error. Waiting to reconnect.")
-                asyncio.sleep(3)
+                await asyncio.sleep(3)
 
     async def post(self, cue_names, content=None):
         if isinstance(content, str):

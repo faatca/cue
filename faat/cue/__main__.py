@@ -1,11 +1,12 @@
 import argparse
+import asyncio
 import logging
 from pathlib import Path
 import random
 import shlex
 from subprocess import list2cmdline, run
 import sys
-from . import connect
+from . import connect_async
 from .keyprovisioning import authenticate
 
 log = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ def main():
     logging.getLogger("httpcore").setLevel(logging.DEBUG if args.verbose else logging.WARNING)
 
     try:
-        result = args.func(args)
+        result = asyncio.run(args.func(args))
     except Exception:
         log.exception("Unexpected error encountered")
         sys.exit(3)
@@ -95,66 +96,84 @@ def main():
         sys.exit(int(result))
 
 
-def do_auth(args):
+async def do_auth(args):
     try:
-        authenticate(args.config, args.url, args.key, args.pattern)
+        await authenticate(args.config, args.url, args.key, args.pattern)
     except KeyboardInterrupt:
         pass
 
 
-def do_wait(args):
-    with connect(config_path=args.config, key_name=args.key) as client:
-        for event in client.listen(args.name):
-            break
+async def do_wait(args):
+    try:
+        async with connect_async(config_path=args.config, key_name=args.key) as client:
+            async for event in client.listen(args.name):
+                break
+    except asyncio.CancelledError:
+        return 4
 
 
-def do_post(args):
-    with connect(config_path=args.config, key_name=args.key) as client:
-        client.post(args.name, args.content)
+async def do_post(args):
+    async with connect_async(config_path=args.config, key_name=args.key) as client:
+        await client.post(args.name, args.content)
 
 
-def do_on(args):
-    with connect(config_path=args.config, key_name=args.key) as client:
-        command = list(args.command)
-        if command[:1] == ["--"]:
-            del command[0]
-        cmd = (
-            command[0]
-            if len(command) == 1
-            else list2cmdline(command)
-            if sys.platform == "win32"
-            else shlex.join(command)
-        )
-        flag_names = set(n.strip() for n in args.name.split(","))
+async def do_on(args):
+    command = list(args.command)
+    if command[:1] == ["--"]:
+        del command[0]
+    cmd = (
+        command[0]
+        if len(command) == 1
+        else list2cmdline(command)
+        if sys.platform == "win32"
+        else shlex.join(command)
+    )
+    flag_names = set(n.strip() for n in args.name.split(","))
 
-        try:
-            for value in client.listen(flag_names):
-                log.debug(f"Recieved flag: {value}")
-                log.debug(f"Running command: {cmd=}")
-                run(cmd, shell=True)
-        except KeyboardInterrupt:
-            log.debug("Closed")
+    try:
+        async with connect_async(config_path=args.config, key_name=args.key) as client:
+            try:
+                async for event in client.listen(flag_names):
+                    log.debug(f"Recieved event: {event}")
+                    log.debug(f"Running command: {cmd=}")
+                    p = await asyncio.create_subprocess_shell(cmd)
+                    await p.wait()
+                    log.debug(f"Command finished: {p.returncode}")
+            except KeyboardInterrupt:
+                log.debug("Closed")
+    except asyncio.CancelledError:
+        return 4
 
 
-def do_run(args):
-    with connect(config_path=args.config, key_name=args.key) as client:
-        if args.name:
-            names = args.name
-        else:
-            alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuv23456789"
-            cue_name = "auto." + "".join(random.choices(alphabet, k=5))
-            print(f"Using random cue name: {cue_name}")
-            names = [cue_name]
+async def do_run(args):
+    if args.name:
+        names = args.name
+    else:
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuv23456789"
+        cue_name = "auto." + "".join(random.choices(alphabet, k=5))
+        print(f"Using random cue name: {cue_name}")
+        names = [cue_name]
 
-        command = args.command
-        if command[:1] == ["--"]:
-            del command[0]
+    command = list(args.command)
+    if command[:1] == ["--"]:
+        del command[0]
+    cmd = (
+        command[0]
+        if len(command) == 1
+        else list2cmdline(command)
+        if sys.platform == "win32"
+        else shlex.join(command)
+    )
+    try:
+        with connect_async(config_path=args.config, key_name=args.key) as client:
+            log.info("Running command")
+            p = await asyncio.create_subprocess_shell(command)
+            await p.wait()
 
-        log.info("Running command")
-        run(command, shell=True)
-
-        log.info("Posting cue")
-        client.post(names)
+            log.info("Posting cue")
+            await client.post(names)
+    except asyncio.CancelledError:
+        return 4
 
 
 if __name__ == "__main__":

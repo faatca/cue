@@ -1,8 +1,8 @@
+import asyncio
 import logging
 import getpass
 from posixpath import join as urljoin
 import socket
-import time
 
 import httpx
 
@@ -11,7 +11,7 @@ from .keydb import KeyDB
 log = logging.getLogger(__name__)
 
 
-def authenticate(config_path, url, key_name, cue_pattern):
+async def authenticate(config_path, url, key_name, cue_pattern):
     if key_name is None:
         user = getpass.getuser()
         host = socket.gethostname()
@@ -19,11 +19,11 @@ def authenticate(config_path, url, key_name, cue_pattern):
     else:
         requested_name = key_name
 
-    with httpx.Client(base_url=url) as session:
-        r = session.post("api/auth", json={"name": requested_name, "pattern": cue_pattern})
+    async with httpx.AsyncClient(base_url=url) as session:
+        r = await session.post("api/auth", json={"name": requested_name, "pattern": cue_pattern})
         r.raise_for_status()
-
         j = r.json()
+
         id = j["id"]
         key = j["key"]
 
@@ -31,10 +31,10 @@ def authenticate(config_path, url, key_name, cue_pattern):
         print("Waiting for authorization")
 
         while True:
-            r = session.get("api/hello", headers={"AUTHORIZATION": f"Bearer {key}"})
+            r = await session.get("api/hello", headers={"AUTHORIZATION": f"Bearer {key}"})
             if r.is_success:
                 break
-            time.sleep(10)
+            await asyncio.sleep(10)
 
         print("Yes! We're in.")
         if not config_path.parent.is_dir():
