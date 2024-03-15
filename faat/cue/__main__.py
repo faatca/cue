@@ -165,9 +165,9 @@ async def do_run(args):
         else shlex.join(command)
     )
     try:
-        with connect_async(config_path=args.config, key_name=args.key) as client:
+        async with connect_async(config_path=args.config, key_name=args.key) as client:
             log.info("Running command")
-            p = await asyncio.create_subprocess_shell(command)
+            p = await asyncio.create_subprocess_shell(cmd)
             await p.wait()
 
             log.info("Posting cue")
